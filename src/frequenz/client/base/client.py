@@ -7,10 +7,20 @@ import abc
 from collections.abc import Callable
 from typing import Any, Generic, Self, TypeVar
 
+from . import retry
 from .channel import ChannelT, parse_grpc_uri
-from .exception import ClientNotConnected
+from .exception import ApiClientError, ClientNotConnected
 
 StubT = TypeVar("StubT")
+
+DEFAULT_RETRY_STRATEGY: retry.Strategy = retry.ExponentialBackoff()
+"""The default retry strategy to use when making requests."""
+
+DEFAULT_RETRY_STRATEGY_MAP: dict[type[Exception], retry.Strategy] = {
+    ApiClientError: DEFAULT_RETRY_STRATEGY
+}
+"""The default retry strategy map to use when making requests.
+"""
 
 
 class BaseApiClient(abc.ABC, Generic[StubT, ChannelT]):
@@ -28,6 +38,9 @@ class BaseApiClient(abc.ABC, Generic[StubT, ChannelT]):
         channel_type: type[ChannelT],
         *,
         auto_connect: bool = True,
+        default_retry_strategy_map: dict[
+            type[Exception], retry.Strategy
+        ] = DEFAULT_RETRY_STRATEGY_MAP,
     ) -> None:
         """Create an instance and connect to the server.
 
@@ -39,12 +52,30 @@ class BaseApiClient(abc.ABC, Generic[StubT, ChannelT]):
                 client will not connect to the server until
                 [connect()][frequenz.client.base.client.BaseApiClient.connect] is
                 called.
+                default_retry_strategy_map: The default retry strategy to use when
+                    making requests. This is a mapping of exception types to retry
+
+                    of exception
+                    requests. If not provided, the default retry strategy is used.
+                    Request are automatically retried using this strategy only if they
+                    are a subclass of
+                    [ApiClientError][frequenz.client.base.exception.ApiClientError] and
+                    are
+                    [retryable][frequenz.client.base.exception.ApiClientError.retryable].
+                    For other types of
         """
         self._server_url: str = server_url
         self._create_stub: Callable[[ChannelT], StubT] = create_stub
         self._channel_type: type[ChannelT] = channel_type
         self._channel: ChannelT | None = None
         self._stub: StubT | None = None
+
+        self.default_retry_strategy = default_retry_strategy
+        """The default retry strategy to use when making requests."""
+
+        if default_retry_strategy is DEFAULT_RETRY_STRATEGY:
+            self.default_retry_strategy = default_retry_strategy.copy()
+
         if auto_connect:
             self.connect(server_url)
 

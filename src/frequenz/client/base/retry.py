@@ -9,6 +9,8 @@ from collections.abc import Iterator
 from copy import deepcopy
 from typing import Self
 
+from typing_extensions import override
+
 DEFAULT_RETRY_INTERVAL = 3.0
 """Default retry interval, in seconds."""
 
@@ -97,6 +99,7 @@ class LinearBackoff(Strategy):
 
         self._count = 0
 
+    @override
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
 
@@ -152,6 +155,7 @@ class ExponentialBackoff(Strategy):
 
         self._count = 0
 
+    @override
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
 
@@ -166,3 +170,96 @@ class ExponentialBackoff(Strategy):
         self._count += 1
         exp_backoff_interval = self._initial * self._multiplier ** (self._count - 1)
         return min(exp_backoff_interval + random.uniform(0.0, self._jitter), self._max)
+
+
+class StrategyMap(Strategy):
+    """A mapping of exception types to retry strategies.
+
+    This class is a subclass of `dict` that provides a more convenient way to create a
+    mapping of exception types to retry strategies.
+
+    The
+
+    The order in the map is important, as `isinstance()` is used to find the first matching
+    exception type, so exeptions higher in the hierarchy should be last, otherwise the
+    subclass will never be matched. For example, if you have a retry strategy for
+    """
+
+    def __init__(self, exception_map: dict[type[Exception], Strategy]) -> None:
+        """Create an instance.
+
+        Args:
+            exception_map: The mapping of exception types to retry strategies.
+        """
+        super().__init__()
+        self.exception_map: dict[type[Exception], Strategy] = exception_map
+        self.current_exception: type[Exception] | None = None
+        self.validate()
+
+    def validate(self) -> None:
+        """Validate the mapping.
+
+        This method checks that the exception types are ordered correctly. If an
+        exception type is a subclass of another exception type, it should be placed
+        after the parent exception type in the mapping.
+
+        Raises:
+            ValueError: If the mapping is invalid.
+        """
+        for exception_type in self.exception_map:
+            for other_exception_type in self.exception_map:
+                if exception_type is other_exception_type:
+                    continue
+                if issubclass(exception_type, other_exception_type):
+                    raise ValueError(
+                        f"{exception_type} is a subclass of {other_exception_type}, "
+                        "but it is placed before it in the mapping. "
+                        "Exception types should be ordered from the most specific to the "
+                        "most general."
+                    )
+
+    @override
+    def get_progress(self) -> str:
+        """Return a string denoting the retry progress.
+
+        Returns:
+            String denoting retry progress in the form "(count/limit)"
+        """
+        if self._limit is None:
+            return f"({self._count}/∞)"
+
+        return ", ".join(
+            f"{exception_type.__name__}:{strategy.get_progress()}"
+            for exception_type, strategy in self.exception_map.items()
+        )
+
+    @override
+    def reset(self) -> None:
+        """Reset the retry counter.
+
+        To be called as soon as a connection is successful.
+        """
+        for strategy in self.exception_map.values():
+            strategy.reset()
+
+    @override
+    def next_interval(self) -> float | None:
+        """Return the time to wait before the next retry.
+
+        Returns `None` if the retry limit has been reached, and no more retries
+        are possible.
+
+        Returns:
+            Time until next retry when below retry limit, and None otherwise.
+
+        Raises:
+            ValueError: If
+                [`current_exception`][frequenz.client.base.retry.StrategyMap.current_exception]
+                is not set.
+        """
+        if not self.current_exception:
+            raise ValueError("No exception type set. Assign current_exception first.")
+        for exception in reversed(self.exception_map):
+            if isinstance(self.current_exception, exception):
+                return self.exception_map[exception].next_interval()
+        return None
