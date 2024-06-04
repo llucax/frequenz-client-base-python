@@ -57,6 +57,17 @@ class Strategy(ABC):
         return self._limit is not None and self._count >= self._limit
 
     @abstractmethod
+    def _calculate_next_wait(self) -> float:
+        """Calculate the time to wait before the next retry.
+
+        This method doesn't have into account the retry limit, it is mainly intended as
+        a helper for the `next_interval()` method and the method that should be
+        implemented by subclasses.
+
+        Returns:
+            The time to wait before the next retry, in seconds.
+        """
+
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
 
@@ -64,8 +75,14 @@ class Strategy(ABC):
         are possible.
 
         Returns:
-            Time until next retry when below retry limit, and None otherwise.
+            The time until next retry in seconds when below retry limit, and `None` if
+                retrying is
+                [exhausted][frequenz.client.base.retry.Strategy.is_exhausted].
         """
+        if self._is_exhausted:
+            return None
+        self._count += 1
+        return self._calculate_next_wait()
 
     def get_progress(self) -> str:
         """Return a string denoting the retry progress.
@@ -119,18 +136,16 @@ class LinearBackoff(Strategy):
         self._jitter = jitter
 
     @override
-    def next_interval(self) -> float | None:
-        """Return the time to wait before the next retry.
+    def _calculate_next_wait(self) -> float:
+        """Calculate the time to wait before the next retry.
 
-        Returns `None` if the retry limit has been reached, and no more retries
-        are possible.
+        This method doesn't have into account the retry limit, it is mainly intended as
+        a helper for the `next_interval()` method and the method that should be
+        implemented by subclasses.
 
         Returns:
-            Time until next retry when below retry limit, and None otherwise.
+            The time to wait before the next retry, in seconds.
         """
-        if self._is_exhausted:
-            return None
-        self._count += 1
         return self._interval + random.uniform(0.0, self._jitter)
 
 
@@ -174,17 +189,15 @@ class ExponentialBackoff(Strategy):
         self._jitter = jitter
 
     @override
-    def next_interval(self) -> float | None:
-        """Return the time to wait before the next retry.
+    def _calculate_next_wait(self) -> float:
+        """Calculate the time to wait before the next retry.
 
-        Returns `None` if the retry limit has been reached, and no more retries
-        are possible.
+        This method doesn't have into account the retry limit, it is mainly intended as
+        a helper for the `next_interval()` method and the method that should be
+        implemented by subclasses.
 
         Returns:
-            Time until next retry when below retry limit, and None otherwise.
+            The time to wait before the next retry, in seconds.
         """
-        if self._is_exhausted:
-            return None
-        self._count += 1
         exp_backoff_interval = self._initial * self._multiplier ** (self._count - 1)
         return min(exp_backoff_interval + random.uniform(0.0, self._jitter), self._max)
