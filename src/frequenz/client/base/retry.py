@@ -22,6 +22,27 @@ class Strategy(ABC):
     _count: int
 
     @property
+    def limit(self) -> int | None:
+        """The maximum number of retries before giving up.
+
+        `None` means no limit and `0` means no retry.
+
+        If set to a negative value, a `ValueError` is raised.
+        """
+        return self._limit
+
+    @limit.setter
+    def limit(self, value: int | None) -> None:
+        if value is not None and value < 0:
+            raise ValueError(f"limit must be non-negative, got {value}")
+        self._limit = value
+
+    @property
+    def count(self) -> int:
+        """The number of retries attempted so far."""
+        return self._count
+
+    @property
     def _is_exhausted(self) -> bool:
         """Whether the retry limit has been reached."""
         return self._limit is not None and self._count >= self._limit
