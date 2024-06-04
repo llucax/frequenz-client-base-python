@@ -5,8 +5,10 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable
-from typing import Generic, TypeVar
+from collections.abc import AsyncIterator, Callable, Mapping
+from typing import Generic, TypeVar, overload
+
+from typing_extensions import override
 
 from frequenz import channels
 
@@ -16,21 +18,24 @@ from ._grpchacks import GrpcioError, GrpclibError
 _logger = logging.getLogger(__name__)
 
 
-InputT = TypeVar("InputT")
-"""The input type of the stream."""
+StubOutT = TypeVar("StubOutT")
+"""The type of the response from a gRPC stub method."""
 
-OutputT = TypeVar("OutputT")
-"""The output type of the stream."""
+TransformOutT_co = TypeVar("TransformOutT_co", covariant=True)
+"""The type of the transformed response from a gRPC stub method."""
+
+BroadcasterMapKeyT = TypeVar("BroadcasterMapKeyT")
+"""The type of the key used to map broadcasters to their keys."""
 
 
-class GrpcStreamBroadcaster(Generic[InputT, OutputT]):
+class GrpcStreamBroadcaster(Generic[StubOutT, TransformOutT_co]):
     """Helper class to handle grpc streaming methods."""
 
     def __init__(
         self,
         stream_name: str,
-        stream_method: Callable[[], AsyncIterator[InputT]],
-        transform: Callable[[InputT], OutputT],
+        stream_method: Callable[[], AsyncIterator[StubOutT]],
+        transform: Callable[[StubOutT], TransformOutT_co],
         retry_strategy: retry.Strategy | None = None,
     ):
         """Initialize the streaming helper.
@@ -50,12 +55,12 @@ class GrpcStreamBroadcaster(Generic[InputT, OutputT]):
             retry.LinearBackoff() if retry_strategy is None else retry_strategy.copy()
         )
 
-        self._channel: channels.Broadcast[OutputT] = channels.Broadcast(
+        self._channel: channels.Broadcast[TransformOutT_co] = channels.Broadcast(
             name=f"GrpcStreamBroadcaster-{stream_name}"
         )
         self._task = asyncio.create_task(self._run())
 
-    def new_receiver(self, maxsize: int = 50) -> channels.Receiver[OutputT]:
+    def new_receiver(self, maxsize: int = 50) -> channels.Receiver[TransformOutT_co]:
         """Create a new receiver for the stream.
 
         Args:
@@ -109,3 +114,44 @@ class GrpcStreamBroadcaster(Generic[InputT, OutputT]):
                 error_str,
             )
             await asyncio.sleep(interval)
+
+
+class GrpcStreamBroadcasterMap(
+    Mapping[BroadcasterMapKeyT, GrpcStreamBroadcaster[StubOutT, TransformOutT_co]]
+):
+
+    def __init__(
+        self,
+        broadcasters: (
+            dict[BroadcasterMapKeyT, GrpcStreamBroadcaster[StubOutT, TransformOutT_co]]
+            | None
+        ) = None,
+        *,
+        channel_name_prefix: str | None = None,
+    ) -> None:
+        if broadcasters is None:
+            broadcasters = {}
+        self._broadcasters: dict[
+            BroadcasterMapKeyT, GrpcStreamBroadcaster[StubOutT, TransformOutT_co]
+        ] = broadcasters
+        self._channel_name_prefix = channel_name_prefix
+
+    @property
+    def channel_name_prefix(self) -> str | None:
+        return self._channel_name_prefix
+
+    @override
+    def __getitem__(
+        self, key: BroadcasterMapKeyT
+    ) -> GrpcStreamBroadcaster[StubOutT, TransformOutT_co]:
+        broadcaster = self._broadcasters.get(key)
+        if broadcaster is None:
+            broadcaster = GrpcStreamBroadcaster(
+                f"{self._channel_name_prefix or ''}{key}",
+                stream_method,
+                transform,
+                retry_strategy=retry_strategy,
+            )
+            broadcasters[key] = broadcaster
+        return broadcaster.new_receiver(maxsize=buffer_size)
+            return self._broadcasters[key]

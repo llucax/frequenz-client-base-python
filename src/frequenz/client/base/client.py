@@ -5,10 +5,12 @@
 
 import abc
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Generic, Self, TypeVar, overload
 
-from . import _grpchacks
+from frequenz.channels import Receiver
+
+from . import _grpchacks, retry, streaming
 from .channel import ChannelT, parse_grpc_uri
 from .exception import ApiClientError, ClientNotConnected
 
@@ -16,7 +18,7 @@ StubT = TypeVar("StubT")
 """The type of the gRPC stub."""
 
 
-class BaseApiClient(abc.ABC, Generic[StubT, ChannelT]):
+class BaseApiClient(abc.ABC, Generic[StubT, BroadcasterMapKeyT, ChannelT]):
     """A base class for API clients.
 
     This class provides a common interface for API clients that communicate with a API
@@ -137,6 +139,9 @@ class BaseApiClient(abc.ABC, Generic[StubT, ChannelT]):
         self._channel_type: type[ChannelT] = channel_type
         self._channel: ChannelT | None = None
         self._stub: StubT | None = None
+        self._broadcasters: dict[
+            BroadcasterMapKeyT, streaming.GrpcStreamBroadcaster[Any, Any]
+        ] = {}
         if connect:
             self.connect(server_url)
 
@@ -236,6 +241,34 @@ class BaseApiClient(abc.ABC, Generic[StubT, ChannelT]):
         self._stub = None
         return result
 
+    async def meter_data(  # noqa: DOC502 (ValueError is raised indirectly by _expect_category)
+        self,
+        component_id: int,
+        buffer_size: int = RECEIVER_MAX_SIZE,
+    ) -> Receiver[MeterData]:
+        """Return a channel receiver that provides a `MeterData` stream.
+
+        Raises:
+            ValueError: if the given id is unknown or has a different type.
+
+        Args:
+            component_id: id of the meter to get data for.
+            maxsize: Size of the receiver's buffer.
+
+        Returns:
+            A channel receiver that provides realtime meter data.
+        """
+        return await new_streaming_receiver(
+            self._broadcasters,
+            key=component_id,
+            stream_method=lambda: self.stub.stream_component_data(
+                pb_microgrid.ComponentIdParam(id=component_id)
+            ),
+            transform=MeterData.from_proto,
+            buffer_size=buffer_size,
+            retry_strategy=retry.ExponentialBackoff(),
+        )
+
 
 StubOutT = TypeVar("StubOutT")
 """The type of the response from a gRPC stub method."""
@@ -312,3 +345,43 @@ async def call_stub_method(
         ) from grpclib_error
 
     return response if transform is None else transform(response)
+
+
+OutputT_co = TypeVar("OutputT_co", covariant=True)
+InputT_contra = TypeVar("InputT_contra", contravariant=True)
+
+
+async def new_streaming_receiver(
+    broadcasters: dict[KeyT, streaming.GrpcStreamBroadcaster[Any, Any]],
+    *,
+    key: BroadcasterMapKeyT,
+    stream_method: Callable[[], AsyncIterator[InputT_contra]],
+    transform: Callable[[InputT_contra], OutputT_co],
+    buffer_size: int,
+    retry_strategy: retry.Strategy,
+) -> Receiver[OutputT_co]:
+    """Return a new broadcaster receiver for a given `component_id`.
+
+    If a broadcaster for the given `component_id` doesn't exist, it creates a new
+    one.
+
+    Args:
+        component_id: id of the component to get data for.
+        expected_category: Category of the component to get data for.
+        transform: A method for transforming raw component data into the
+            desired output type.
+        maxsize: Size of the receiver's buffer.
+
+    Returns:
+        The new receiver for the given `component_id`.
+    """
+    broadcaster = broadcasters.get(key)
+    if broadcaster is None:
+        broadcaster = streaming.GrpcStreamBroadcaster(
+            f"raw-component-data-{key}",
+            stream_method,
+            transform,
+            retry_strategy=retry_strategy,
+        )
+        broadcasters[key] = broadcaster
+    return broadcaster.new_receiver(maxsize=buffer_size)
