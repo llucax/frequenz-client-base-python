@@ -21,6 +21,11 @@ class Strategy(ABC):
     _limit: int | None
     _count: int
 
+    @property
+    def _is_exhausted(self) -> bool:
+        """Whether the retry limit has been reached."""
+        return self._limit is not None and self._count >= self._limit
+
     @abstractmethod
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
@@ -93,7 +98,7 @@ class LinearBackoff(Strategy):
         Returns:
             Time until next retry when below retry limit, and None otherwise.
         """
-        if self._limit is not None and self._count >= self._limit:
+        if self._is_exhausted:
             return None
         self._count += 1
         return self._interval + random.uniform(0.0, self._jitter)
@@ -148,7 +153,7 @@ class ExponentialBackoff(Strategy):
         Returns:
             Time until next retry when below retry limit, and None otherwise.
         """
-        if self._limit is not None and self._count >= self._limit:
+        if self._is_exhausted:
             return None
         self._count += 1
         exp_backoff_interval = self._initial * self._multiplier ** (self._count - 1)
