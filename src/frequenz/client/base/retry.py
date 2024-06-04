@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Self
 
+from typing_extensions import override
+
 DEFAULT_RETRY_INTERVAL = 3.0
 """Default retry interval, in seconds."""
 
@@ -116,7 +118,7 @@ class LinearBackoff(Strategy):
         self._interval = interval
         self._jitter = jitter
 
-
+    @override
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
 
@@ -171,6 +173,7 @@ class ExponentialBackoff(Strategy):
         self._multiplier = multiplier
         self._jitter = jitter
 
+    @override
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
 
