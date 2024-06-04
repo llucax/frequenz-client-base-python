@@ -18,8 +18,15 @@ DEFAULT_RETRY_JITTER = 1.0
 class Strategy(ABC):
     """Interface for implementing retry strategies."""
 
-    _limit: int | None
-    _count: int
+    def __init__(self, *, limit: int | None = None) -> None:
+        """Create an instance.
+
+        Args:
+            limit: The maximum number of retries before giving up. `None` means no
+                limit, and `0` means no retry.
+        """
+        self.limit = limit  # Assign via property to enforce validation
+        self._count = 0
 
     @property
     def limit(self) -> int | None:
@@ -94,6 +101,7 @@ class LinearBackoff(Strategy):
         self,
         interval: float = DEFAULT_RETRY_INTERVAL,
         jitter: float = DEFAULT_RETRY_JITTER,
+        *,
         limit: int | None = None,
     ) -> None:
         """Create a `LinearBackoff` instance.
@@ -104,11 +112,10 @@ class LinearBackoff(Strategy):
             limit: max number of retries before giving up.  `None` means no
                 limit, and `0` means no retry.
         """
+        super().__init__(limit=limit)
         self._interval = interval
         self._jitter = jitter
-        self._limit = limit
 
-        self._count = 0
 
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
@@ -144,6 +151,7 @@ class ExponentialBackoff(Strategy):
         max_interval: float = DEFAULT_MAX_INTERVAL,
         multiplier: float = DEFAULT_MULTIPLIER,
         jitter: float = DEFAULT_RETRY_JITTER,
+        *,
         limit: int | None = None,
     ) -> None:
         """Create a `ExponentialBackoff` instance.
@@ -157,13 +165,11 @@ class ExponentialBackoff(Strategy):
             limit: max number of retries before giving up.  `None` means no
                 limit, and `0` means no retry.
         """
+        super().__init__(limit=limit)
         self._initial = initial_interval
         self._max = max_interval
         self._multiplier = multiplier
         self._jitter = jitter
-        self._limit = limit
-
-        self._count = 0
 
     def next_interval(self) -> float | None:
         """Return the time to wait before the next retry.
