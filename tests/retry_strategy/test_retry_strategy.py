@@ -21,10 +21,6 @@ class TestLinearBackoff:
         for _ in range(10):
             assert strategy.next_interval() == interval
 
-    def test_iter(self) -> None:
-        """Test iterator."""
-        assert list(retry.LinearBackoff(1, 0, 3)) == [1, 1, 1]
-
     def test_with_limit(self) -> None:
         """Test limit works."""
         interval = 3

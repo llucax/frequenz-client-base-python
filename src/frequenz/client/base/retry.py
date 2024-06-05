@@ -5,7 +5,6 @@
 
 import random
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
 from copy import deepcopy
 from typing import Self
 
@@ -60,18 +59,6 @@ class Strategy(ABC):
         ret = deepcopy(self)
         ret.reset()
         return ret
-
-    def __iter__(self) -> Iterator[float]:
-        """Return an iterator over the retry intervals.
-
-        Yields:
-            Next retry interval in seconds.
-        """
-        while True:
-            interval = self.next_interval()
-            if interval is None:
-                break
-            yield interval
 
 
 class LinearBackoff(Strategy):
