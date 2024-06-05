@@ -87,12 +87,12 @@ class TestLinearBackoff:
         """Test if deep copies are really deep copies."""
         strategy = retry.LinearBackoff(1.0, 0.0, 2)
 
-        copy1 = strategy.copy()
+        copy1 = strategy.copy(reset_copy=True)
         assert copy1.next_interval() == 1.0
         assert copy1.next_interval() == 1.0
         assert copy1.next_interval() is None
 
-        copy2 = copy1.copy()
+        copy2 = copy1.copy(reset_copy=True)
         assert copy1.next_interval() is None
         assert copy2.next_interval() == 1.0
         assert copy2.next_interval() == 1.0
@@ -126,12 +126,12 @@ class TestExponentialBackoff:
         """Test if deep copies are really deep copies."""
         strategy = retry.ExponentialBackoff(3.0, 30.0, 2, 0.0, 2)
 
-        copy1 = strategy.copy()
+        copy1 = strategy.copy(reset_copy=True)
         assert copy1.next_interval() == 3.0
         assert copy1.next_interval() == 6.0
         assert copy1.next_interval() is None
 
-        copy2 = copy1.copy()
+        copy2 = copy1.copy(reset_copy=True)
         assert copy1.next_interval() is None
         assert copy2.next_interval() == 3.0
         assert copy2.next_interval() == 6.0

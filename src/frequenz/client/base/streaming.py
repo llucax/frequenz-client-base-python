@@ -47,7 +47,9 @@ class GrpcStreamBroadcaster(Generic[InputT, OutputT]):
         self._stream_method = stream_method
         self._transform = transform
         self._retry_strategy = (
-            retry.LinearBackoff() if retry_strategy is None else retry_strategy.copy()
+            retry.LinearBackoff()
+            if retry_strategy is None
+            else retry_strategy.copy(reset_copy=True)
         )
 
         self._channel: channels.Broadcast[OutputT] = channels.Broadcast(

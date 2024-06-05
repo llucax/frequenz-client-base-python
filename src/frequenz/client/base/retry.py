@@ -109,14 +109,20 @@ class Strategy(ABC):
         """
         self._count = 0
 
-    def copy(self) -> Self:
-        """Create a new instance of `self`.
+    def copy(self, reset_copy: bool = False) -> Self:
+        """Return a copy of this strategy, optionally resetting the copy's state.
+
+        Args:
+            reset_copy: Whether to reset the state of the copy. If `True`, the
+                [`reset()`][frequenz.client.base.retry.Strategy.reset] method is called
+                on the copy.
 
         Returns:
-            A deepcopy of `self`.
+            A copy of this strategy, possibly with its state reset.
         """
         ret = deepcopy(self)
-        ret.reset()
+        if reset_copy:
+            ret.reset()
         return ret
 
 
