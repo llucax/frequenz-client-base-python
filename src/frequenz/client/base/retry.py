@@ -281,7 +281,7 @@ class ExponentialBackoff(IntervalWithJitterBasedStrategy):
             jitter: The jitter to add to the retry interval, in seconds. It should be a
                 positive number including zero.
             max_interval: The maximum amount of time to wait for before the next retry,
-                in seconds. It should be a positive number.
+                in seconds. It should be bigger than `interval`.
             multiplier: The multiplier for the exponential increment. It should be a
                 positive number greater than one.
             limit: The maximum number of retries before giving up. `None` means no
@@ -291,8 +291,40 @@ class ExponentialBackoff(IntervalWithJitterBasedStrategy):
             ValueError: If `interval` or `jitter` are not a positive number.
         """
         super().__init__(limit=limit, interval=interval, jitter=jitter)
-        self._max_interval = max_interval
-        self._multiplier = multiplier
+        self.max_interval = max_interval  # Assign via property to enforce validation
+        self.multiplier = multiplier  # Assign via property to enforce validation
+
+    @property
+    def max_interval(self) -> float:
+        """The maximum amount of time to wait for before the next retry, in seconds.
+
+        It should be bigger than the
+        [`interval`][frequenz.client.base.retry.ExponentialBackoff.interval].
+        """
+        return self._max_interval
+
+    @max_interval.setter
+    def max_interval(self, value: float) -> None:
+        if value <= self._interval:
+            raise ValueError(
+                f"max_interval must be bigger than the interval, got {value} but "
+                f"interval is {self._interval}"
+            )
+        self._max_interval = value
+
+    @property
+    def multiplier(self) -> float:
+        """The multiplier for the exponential increment.
+
+        It should be greater than one.
+        """
+        return self._multiplier
+
+    @multiplier.setter
+    def multiplier(self, value: float) -> None:
+        if value <= 1.0:
+            raise ValueError(f"multiplier must be greater than one, got {value}")
+        self._multiplier = value
 
     @override
     def _calculate_next_wait(self) -> float:
