@@ -5,7 +5,99 @@
 
 # pylint: disable=chained-comparison
 
+import pytest
+from typing_extensions import override
+
 from frequenz.client.base import retry
+
+
+class _FakeRetryStrategy(retry.Strategy):
+    def __init__(self, *, limit: int | None) -> None:
+        super().__init__(limit=limit)
+
+    @override
+    def _calculate_next_wait(self) -> float:
+        return 1.0
+
+
+class TestStrategy:
+    """Tests for the base retry strategy."""
+
+    def test_wrong_limit(self) -> None:
+        """Test creating a retry strategy with a wrong limit."""
+        with pytest.raises(ValueError, match="limit must be non-negative, got -1"):
+            _ = _FakeRetryStrategy(limit=-1)
+
+    def test_no_limit(self) -> None:
+        """Test a retry strategy without a limit."""
+        strategy = _FakeRetryStrategy(limit=None)
+
+        for _ in range(100):
+            assert strategy.next_interval() == 1.0
+
+        strategy.reset()
+        assert strategy.count == 0
+
+    def test_with_limit(self) -> None:
+        """Test a retry strategy with a limit."""
+        strategy = _FakeRetryStrategy(limit=3)
+
+        for _ in range(3):
+            assert strategy.next_interval() == 1.0
+        assert strategy.next_interval() is None
+
+        strategy.reset()
+        assert strategy.count == 0
+
+    def test_with_limit_0(self) -> None:
+        """Test a retry strategy with a limit."""
+        strategy = _FakeRetryStrategy(limit=0)
+
+        assert strategy.next_interval() is None
+
+        strategy.reset()
+        assert strategy.count == 0
+
+    def test_copy(self) -> None:
+        """Test copying a retry strategy."""
+        strategy = _FakeRetryStrategy(limit=2)
+
+        copy1 = strategy.copy(reset_copy=True)
+        assert copy1 is not strategy
+        assert copy1.limit == strategy.limit
+        assert copy1.count == 0
+        assert copy1.next_interval() == 1.0
+        assert copy1.next_interval() == 1.0
+        assert copy1.next_interval() is None
+
+        copy2 = copy1.copy(reset_copy=True)
+        assert copy2 is not copy1
+        assert copy2 is not strategy
+        assert copy2.limit == strategy.limit
+        assert copy2.count == 0
+        assert copy1.next_interval() is None
+        assert copy2.next_interval() == 1.0
+        assert copy2.next_interval() == 1.0
+        assert copy2.next_interval() is None
+
+        copy3 = copy1.copy()
+        assert copy3 is not copy2
+        assert copy3 is not copy1
+        assert copy3 is not strategy
+        assert copy3.limit == strategy.limit
+        assert copy3.count == 2
+        assert copy1.next_interval() is None
+        assert copy2.next_interval() is None
+        assert copy3.next_interval() is None
+
+    def test_str(self) -> None:
+        """Test the string representation of a retry strategy."""
+        strategy = _FakeRetryStrategy(limit=1)
+        assert str(strategy) == "retrying (0/1)"
+        _ = strategy.next_interval()
+        assert str(strategy) == "retrying (1/1) in 1.0 seconds"
+        _ = strategy.next_interval()
+        assert str(strategy) == "retry limit reached (1/1)"
 
 
 class TestLinearBackoff:
