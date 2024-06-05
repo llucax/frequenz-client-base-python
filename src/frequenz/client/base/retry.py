@@ -130,7 +130,8 @@ class Strategy(ABC):
     def reset(self) -> None:
         """Reset the retry counter.
 
-        To be called as soon as a connection is successful.
+        To be called as soon as an operation successful if you want to reuse this
+        strategy.
         """
         self._count = 0
 
@@ -217,7 +218,7 @@ class IntervalWithJitterBasedStrategy(Strategy, ABC):
 
 
 class LinearBackoff(IntervalWithJitterBasedStrategy):
-    """Provides methods for calculating the interval between retries."""
+    """A retry strategy that retries as a linear function of the retry count."""
 
     def __init__(
         self,
@@ -228,9 +229,11 @@ class LinearBackoff(IntervalWithJitterBasedStrategy):
         """Create a `LinearBackoff` instance.
 
         Args:
-            interval: time to wait for before the next retry, in seconds.
-            jitter: a jitter to add to the retry interval.
-            limit: max number of retries before giving up.  `None` means no
+            interval: The minimum amount of time to wait for before the next retry, in
+                seconds. It should be a positive number.
+            jitter: The jitter to add to the retry interval, in seconds. It should be a
+                positive number including zero.
+            limit: The maximum number of retries before giving up. `None` means no
                 limit, and `0` means no retry.
 
         Raises:
@@ -253,7 +256,7 @@ class LinearBackoff(IntervalWithJitterBasedStrategy):
 
 
 class ExponentialBackoff(IntervalWithJitterBasedStrategy):
-    """Provides methods for calculating the exponential interval between retries."""
+    """A retry strategy that retries as an exponential function of the retry count."""
 
     DEFAULT_MAX_INTERVAL = 60.0
     """Default maximum retry interval, in seconds."""
@@ -273,11 +276,15 @@ class ExponentialBackoff(IntervalWithJitterBasedStrategy):
         """Create a `ExponentialBackoff` instance.
 
         Args:
-            interval: time to wait for before the first retry, in seconds.
-            jitter: a jitter to add to the retry interval.
-            max_interval: maximum interval, in seconds.
-            multiplier: exponential increment for interval.
-            limit: max number of retries before giving up.  `None` means no
+            interval: The minimum amount of time to wait for before the next retry, in
+                seconds. It should be a positive number.
+            jitter: The jitter to add to the retry interval, in seconds. It should be a
+                positive number including zero.
+            max_interval: The maximum amount of time to wait for before the next retry,
+                in seconds. It should be a positive number.
+            multiplier: The multiplier for the exponential increment. It should be a
+                positive number greater than one.
+            limit: The maximum number of retries before giving up. `None` means no
                 limit, and `0` means no retry.
 
         Raises:
