@@ -145,7 +145,7 @@ class TestExponentialBackoff:
         multiplier = 2
         limit = None
         strategy: retry.Strategy = retry.ExponentialBackoff(
-            initial_interval=initial_interval,
+            interval=initial_interval,
             max_interval=max_interval,
             multiplier=multiplier,
             jitter=jitter,
@@ -171,7 +171,7 @@ class TestExponentialBackoff:
         multiplier = 2
         limit = 2
         strategy: retry.Strategy = retry.ExponentialBackoff(
-            initial_interval=initial_interval,
+            interval=initial_interval,
             max_interval=max_interval,
             multiplier=multiplier,
             jitter=jitter,

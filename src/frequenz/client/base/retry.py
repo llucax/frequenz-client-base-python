@@ -10,12 +10,6 @@ from typing import Self
 
 from typing_extensions import override
 
-DEFAULT_RETRY_INTERVAL = 3.0
-"""Default retry interval, in seconds."""
-
-DEFAULT_RETRY_JITTER = 1.0
-"""Default retry jitter, in seconds."""
-
 
 class Strategy(ABC):
     """Interface for implementing retry strategies."""
@@ -191,13 +185,13 @@ class IntervalWithJitterBasedStrategy(Strategy, ABC):
         return value + random.uniform(0.0, self._jitter)
 
 
-class LinearBackoff(Strategy):
+class LinearBackoff(IntervalWithJitterBasedStrategy):
     """Provides methods for calculating the interval between retries."""
 
     def __init__(
         self,
-        interval: float = DEFAULT_RETRY_INTERVAL,
-        jitter: float = DEFAULT_RETRY_JITTER,
+        interval: float = IntervalWithJitterBasedStrategy.DEFAULT_INTERVAL,
+        jitter: float = IntervalWithJitterBasedStrategy.DEFAULT_JITTER,
         *,
         limit: int | None = None,
     ) -> None:
@@ -208,10 +202,11 @@ class LinearBackoff(Strategy):
             jitter: a jitter to add to the retry interval.
             limit: max number of retries before giving up.  `None` means no
                 limit, and `0` means no retry.
+
+        Raises:
+            ValueError: If `interval` or `jitter` are not a positive number.
         """
-        super().__init__(limit=limit)
-        self._interval = interval
-        self._jitter = jitter
+        super().__init__(limit=limit, interval=interval, jitter=jitter)
 
     @override
     def _calculate_next_wait(self) -> float:
@@ -224,14 +219,11 @@ class LinearBackoff(Strategy):
         Returns:
             The time to wait before the next retry, in seconds.
         """
-        return self._interval + random.uniform(0.0, self._jitter)
+        return self.apply_jitter(self._interval)
 
 
-class ExponentialBackoff(Strategy):
+class ExponentialBackoff(IntervalWithJitterBasedStrategy):
     """Provides methods for calculating the exponential interval between retries."""
-
-    DEFAULT_INTERVAL = DEFAULT_RETRY_INTERVAL
-    """Default retry interval, in seconds."""
 
     DEFAULT_MAX_INTERVAL = 60.0
     """Default maximum retry interval, in seconds."""
@@ -242,29 +234,29 @@ class ExponentialBackoff(Strategy):
     # pylint: disable=too-many-arguments
     def __init__(
         self,
-        initial_interval: float = DEFAULT_INTERVAL,
+        interval: float = IntervalWithJitterBasedStrategy.DEFAULT_INTERVAL,
+        jitter: float = IntervalWithJitterBasedStrategy.DEFAULT_JITTER,
         max_interval: float = DEFAULT_MAX_INTERVAL,
         multiplier: float = DEFAULT_MULTIPLIER,
-        jitter: float = DEFAULT_RETRY_JITTER,
         *,
         limit: int | None = None,
     ) -> None:
         """Create a `ExponentialBackoff` instance.
 
         Args:
-            initial_interval: time to wait for before the first retry, in
-                seconds.
+            interval: time to wait for before the first retry, in seconds.
+            jitter: a jitter to add to the retry interval.
             max_interval: maximum interval, in seconds.
             multiplier: exponential increment for interval.
-            jitter: a jitter to add to the retry interval.
             limit: max number of retries before giving up.  `None` means no
                 limit, and `0` means no retry.
+
+        Raises:
+            ValueError: If `interval` or `jitter` are not a positive number.
         """
-        super().__init__(limit=limit)
-        self._initial = initial_interval
-        self._max = max_interval
+        super().__init__(limit=limit, interval=interval, jitter=jitter)
+        self._max_interval = max_interval
         self._multiplier = multiplier
-        self._jitter = jitter
 
     @override
     def _calculate_next_wait(self) -> float:
@@ -277,5 +269,5 @@ class ExponentialBackoff(Strategy):
         Returns:
             The time to wait before the next retry, in seconds.
         """
-        exp_backoff_interval = self._initial * self._multiplier ** (self._count - 1)
-        return min(exp_backoff_interval + random.uniform(0.0, self._jitter), self._max)
+        exp_backoff_interval = self._interval * self._multiplier ** (self._count - 1)
+        return min(self.apply_jitter(exp_backoff_interval), self._max_interval)
