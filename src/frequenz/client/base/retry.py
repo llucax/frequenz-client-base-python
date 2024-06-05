@@ -1,7 +1,38 @@
 # License: MIT
 # Copyright © 2022 Frequenz Energy-as-a-Service GmbH
 
-"""Implementations for retry strategies."""
+"""Retry strategies for handling transient errors.
+
+Retry strategies are used to calculate the time to wait before the next retry. They
+usually have a limit on the number of retries before giving up.
+
+Normally, retry strategies are used in combination with a loop that retries an
+operation until it succeeds or the retry limit is reached. The loop should call the
+[`next_interval()`][frequenz.client.base.retry.Strategy.next_interval] method to get
+the time to wait before the next retry. If the method returns `None`, the retry limit
+has been reached, and no more retries are possible.
+
+Example:
+    ```python
+    import logging
+    import asyncio
+
+    def operation_that_may_fail():
+        ...
+
+    strategy: Strategy = LinearBackoff()
+    while True:
+        try:
+            operation_that_may_fail()
+        except RuntimeError as error:
+            interval = strategy.next_interval()
+            if interval is None:
+                logging.error("Failed, %s, bailing out. Error: %s", strategy, error)
+                break
+            logging.warning("Failed, %s. Error: %s", strategy, error)
+            await asyncio.sleep(interval)
+    ```
+"""
 
 import random
 from abc import ABC, abstractmethod
