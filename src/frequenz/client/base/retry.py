@@ -126,6 +126,71 @@ class Strategy(ABC):
         return ret
 
 
+class IntervalWithJitterBasedStrategy(Strategy, ABC):
+    """Base class for strategies that use retries based on an interval plus a jitter."""
+
+    DEFAULT_INTERVAL = 3.0
+    """Default retry interval, in seconds."""
+
+    DEFAULT_JITTER = 1.0
+    """Default retry jitter, in seconds."""
+
+    def __init__(
+        self,
+        *,
+        interval: float = DEFAULT_INTERVAL,
+        jitter: float = DEFAULT_JITTER,
+        limit: int | None = None,
+    ) -> None:
+        """Create an instance.
+
+        Args:
+            interval: The minimum amount of time to wait for before the next retry, in
+                seconds. It should be a positive number.
+            jitter: The jitter to add to the retry interval, in seconds. It should be a
+                positive number including zero.
+            limit: The maximum number of retries before giving up. `None` means no
+                limit, and `0` means no retry.
+
+        Raises:
+            ValueError: If `interval` or `jitter` are not a positive number.
+        """
+        super().__init__(limit=limit)
+        if interval <= 0.0:
+            raise ValueError(f"interval must be a positive number, got {interval}")
+        self._interval = interval
+        self.jitter = jitter  # Assign via property to enforce validation
+
+    @property
+    def interval(self) -> float:
+        """The base amount of time to wait for before the next retry, in seconds."""
+        return self._interval
+
+    @property
+    def jitter(self) -> float:
+        """The jitter to add to the retry interval, in seconds.
+
+        Must be a positive number.
+        """
+        return self._jitter
+
+    @jitter.setter
+    def jitter(self, value: float) -> None:
+        if value < 0.0:
+            raise ValueError(f"jitter must be a positive number, got {value}")
+        self._jitter = value
+
+    def apply_jitter(self, value: float) -> float:
+        """Return the value with some added uniformly."""
+        # Tricky comparison with 0.0, but in this case it should be fine, it should not
+        # be negative because it was validated and if it is not exactly zero, it should
+        # be OK to pass to `uniform()` and get a value even if it is the smaller value
+        # representable by a float.
+        if self._jitter == 0.0:
+            return value
+        return value + random.uniform(0.0, self._jitter)
+
+
 class LinearBackoff(Strategy):
     """Provides methods for calculating the interval between retries."""
 
