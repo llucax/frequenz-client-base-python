@@ -33,7 +33,7 @@ def no_retry() -> mock.MagicMock:
     mock_retry = mock.MagicMock(spec=retry.Strategy)
     mock_retry.next_interval.return_value = None
     mock_retry.copy.return_value = mock_retry
-    mock_retry.get_progress.return_value = "mock progress"
+    mock_retry.__str__.return_value = "mock progress"  # type: ignore[attr-defined]
     return mock_retry
 
 
@@ -108,8 +108,7 @@ async def test_streaming_success(
         (
             "frequenz.client.base.streaming",
             logging.ERROR,
-            "test_helper: connection ended, retry limit exceeded (mock progress), "
-            "giving up. Stream exhausted.",
+            "test_helper: connection ended, mock progress, giving up: Stream exhausted.",
         )
     ]
 
@@ -192,8 +191,8 @@ async def test_streaming_error(  # pylint: disable=too-many-arguments
         (
             "frequenz.client.base.streaming",
             logging.ERROR,
-            "test_helper: connection ended, retry limit exceeded (mock progress), "
-            f"giving up. Error: {expected_error_str}.",
+            "test_helper: connection ended, mock progress, giving up: "
+            f"{expected_error_str}.",
         ),
     ]
 
@@ -237,7 +236,7 @@ async def test_retry_next_interval_zero(  # pylint: disable=too-many-arguments
     mock_retry = mock.MagicMock(spec=retry.Strategy)
     mock_retry.next_interval.side_effect = [0, None]
     mock_retry.copy.return_value = mock_retry
-    mock_retry.get_progress.return_value = "mock progress"
+    mock_retry.__str__.return_value = "mock progress"  # type: ignore[attr-defined]
     helper = streaming.GrpcStreamBroadcaster(
         stream_name="test_helper",
         stream_method=lambda: _ErroringAsyncIter(error, receiver_ready_event),
@@ -260,13 +259,12 @@ async def test_retry_next_interval_zero(  # pylint: disable=too-many-arguments
         (
             "frequenz.client.base.streaming",
             logging.WARNING,
-            "test_helper: connection ended, retrying mock progress in 0.000 "
-            f"seconds. Error: {expected_error_str}.",
+            f"test_helper: connection ended, mock progress: {expected_error_str}.",
         ),
         (
             "frequenz.client.base.streaming",
             logging.ERROR,
-            "test_helper: connection ended, retry limit exceeded (mock progress), "
-            f"giving up. Error: {expected_error_str}.",
+            "test_helper: connection ended, mock progress, giving up: "
+            f"{expected_error_str}.",
         ),
     ]

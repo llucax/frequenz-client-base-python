@@ -29,6 +29,7 @@ class Strategy(ABC):
         """
         self.limit = limit  # Assign via property to enforce validation
         self._count = 0
+        self._last_interval: float | None = None
 
     @property
     def limit(self) -> int | None:
@@ -80,20 +81,26 @@ class Strategy(ABC):
                 [exhausted][frequenz.client.base.retry.Strategy.is_exhausted].
         """
         if self._is_exhausted:
+            self._last_interval = None
             return None
         self._count += 1
-        return self._calculate_next_wait()
+        self._last_interval = self._calculate_next_wait()
+        return self._last_interval
 
-    def get_progress(self) -> str:
-        """Return a string denoting the retry progress.
+    def __str__(self) -> str:
+        """Return a string denoting the retry progress."""
+        progress = (
+            f"({self._count}/∞)"
+            if self._limit is None
+            else f"{self._count}/{self._limit}"
+        )
+        if self._is_exhausted and self._last_interval is None:
+            return f"retry limit reached ({progress})"
 
-        Returns:
-            String denoting retry progress in the form "(count/limit)"
-        """
-        if self._limit is None:
-            return f"({self._count}/∞)"
-
-        return f"({self._count}/{self._limit})"
+        time_info = (
+            "" if self._last_interval is None else f" in {self._last_interval} seconds"
+        )
+        return f"retrying ({progress}){time_info}"
 
     def reset(self) -> None:
         """Reset the retry counter.

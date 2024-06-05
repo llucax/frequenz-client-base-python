@@ -90,22 +90,21 @@ class GrpcStreamBroadcaster(Generic[InputT, OutputT]):
                     await sender.send(self._transform(msg))
             except (GrpcioError, GrpclibError) as err:
                 error = err
-            error_str = f"Error: {error}" if error else "Stream exhausted"
+            error_str = str(error) if error else "Stream exhausted"
             interval = self._retry_strategy.next_interval()
             if interval is None:
                 _logger.error(
-                    "%s: connection ended, retry limit exceeded (%s), giving up. %s.",
+                    "%s: connection ended, %s, giving up: %s.",
                     self._stream_name,
-                    self._retry_strategy.get_progress(),
+                    self._retry_strategy,
                     error_str,
                 )
                 await self._channel.close()
                 break
             _logger.warning(
-                "%s: connection ended, retrying %s in %0.3f seconds. %s.",
+                "%s: connection ended, %s: %s.",
                 self._stream_name,
-                self._retry_strategy.get_progress(),
-                interval,
+                self._retry_strategy,
                 error_str,
             )
             await asyncio.sleep(interval)
