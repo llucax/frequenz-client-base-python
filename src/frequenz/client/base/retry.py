@@ -192,7 +192,6 @@ class LinearBackoff(IntervalWithJitterBasedStrategy):
         self,
         interval: float = IntervalWithJitterBasedStrategy.DEFAULT_INTERVAL,
         jitter: float = IntervalWithJitterBasedStrategy.DEFAULT_JITTER,
-        *,
         limit: int | None = None,
     ) -> None:
         """Create a `LinearBackoff` instance.
@@ -238,7 +237,6 @@ class ExponentialBackoff(IntervalWithJitterBasedStrategy):
         jitter: float = IntervalWithJitterBasedStrategy.DEFAULT_JITTER,
         max_interval: float = DEFAULT_MAX_INTERVAL,
         multiplier: float = DEFAULT_MULTIPLIER,
-        *,
         limit: int | None = None,
     ) -> None:
         """Create a `ExponentialBackoff` instance.
