@@ -70,14 +70,24 @@ class BaseApiClient(abc.ABC, Generic[StubT]):
             def __init__(self, response: ExampleResponse):
                 self.transformed_value = f"{response.float_value:.2f}"
 
+        # Change defaults as needed
+        DEFAULT_CHANNEL_OPTIONS = ChannelOptions()
+
         class MyApiClient(BaseApiClient[ExampleAsyncStub]):
-            def __init__(self, server_url: str, *, connect: bool = True):
+            def __init__(
+                    self,
+                    server_url: str,
+                    *,
+                    connect: bool = True,
+                    channel_defaults: ChannelOptions = DEFAULT_CHANNEL_OPTIONS,
+            ) -> None:
                 super().__init__(
                     server_url,
                     # We need to type ignore here because the generated normal and
                     # async stubs are not type-compatible with each other.
                     ExampleStub,  # type: ignore[arg-type]
-                    connect=connect
+                    connect=connect,
+                    channel_defaults=channel_defaults,
                 )
                 self._broadcaster = GrpcStreamBroadcaster(
                     "stream",
