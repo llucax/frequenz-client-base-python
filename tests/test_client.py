@@ -10,6 +10,10 @@ import grpc.aio
 import pytest
 import pytest_mock
 
+from frequenz.client.base.authentication import (
+    AuthenticationInterceptorUnaryStream,
+    AuthenticationInterceptorUnaryUnary,
+)
 from frequenz.client.base.channel import ChannelOptions, SslOptions
 from frequenz.client.base.client import (
     BaseApiClient,
@@ -17,6 +21,10 @@ from frequenz.client.base.client import (
     call_stub_method,
 )
 from frequenz.client.base.exception import ClientNotConnected, UnknownError
+from frequenz.client.base.signing import (
+    SigningInterceptorUnaryStream,
+    SigningInterceptorUnaryUnary,
+)
 
 
 def _auto_connect_name(auto_connect: bool) -> str:
@@ -225,8 +233,68 @@ class TestBaseApiClient:
         assert client.server_url == _DEFAULT_SERVER_URL
         self._assert_is_disconnected(client)
 
-    async def test_create_interceptors(self) -> None:
+    @pytest.fixture
+    def signing_unary_unary_interceptor(self) -> mock.MagicMock:
+        """Return a mock SigningInterceptorUnaryUnary."""
+        return mock.MagicMock(
+            name="SigningInterceptorUnaryUnary", spec=SigningInterceptorUnaryUnary
+        )
+
+    @pytest.fixture
+    def signing_unary_stream_interceptor(self) -> mock.MagicMock:
+        """Return a mock SigningInterceptorUnaryStream."""
+        return mock.MagicMock(
+            name="SigningInterceptorUnaryStream", spec=SigningInterceptorUnaryStream
+        )
+
+    @pytest.fixture
+    def auth_unary_unary_interceptor(self) -> mock.MagicMock:
+        """Return a mock AuthenticationInterceptorUnaryUnary."""
+        return mock.MagicMock(
+            name="AuthenticationInterceptorUnaryUnary",
+            spec=AuthenticationInterceptorUnaryUnary,
+        )
+
+    @pytest.fixture
+    def auth_unary_stream_interceptor(
+        self,
+    ) -> mock.MagicMock:
+        """Return a mock AuthenticationInterceptorUnaryStream."""
+        return mock.MagicMock(
+            name="AuthenticationInterceptorUnaryStream",
+            spec=AuthenticationInterceptorUnaryStream,
+        )
+
+    async def test_create_interceptors(
+        self,
+        signing_unary_unary_interceptor: mock.MagicMock,
+        signing_unary_stream_interceptor: mock.MagicMock,
+        auth_unary_unary_interceptor: mock.MagicMock,
+        auth_unary_stream_interceptor: mock.MagicMock,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
         """Test that the client constructor creates the interceptors as expected."""
+
+        mocker.patch(
+            "frequenz.client.base.client.AuthenticationInterceptorUnaryStream",
+            autospec=True,
+            return_value=auth_unary_stream_interceptor,
+        )
+        mocker.patch(
+            "frequenz.client.base.client.AuthenticationInterceptorUnaryUnary",
+            autospec=True,
+            return_value=auth_unary_unary_interceptor,
+        )
+        mocker.patch(
+            "frequenz.client.base.client.SigningInterceptorUnaryStream",
+            autospec=True,
+            return_value=signing_unary_stream_interceptor,
+        )
+        mocker.patch(
+            "frequenz.client.base.client.SigningInterceptorUnaryUnary",
+            autospec=True,
+            return_value=signing_unary_unary_interceptor,
+        )
         async with BaseApiClient(
             _DEFAULT_SERVER_URL,
             self._create_stub,
@@ -239,10 +307,10 @@ class TestBaseApiClient:
                 [mock.ANY, mock.ANY, mock.ANY, mock.ANY],
                 defaults=ChannelOptions(),
             )
-            args, _ = self._parse_grpc_uri.call_args
-            interceptors = args[1]
-            for interceptor in interceptors:
-                assert isinstance(interceptor, grpc.aio.ClientInterceptor)
+            signing_unary_unary_interceptor.assert_called_once_with("password1245")
+            signing_unary_stream_interceptor.assert_called_once_with("password1245")
+            auth_unary_unary_interceptor.assert_called_once_with("hunter2")
+            auth_unary_stream_interceptor.assert_called_once_with("hunter2")
 
 
 def _transform_name(transform: bool) -> str:
