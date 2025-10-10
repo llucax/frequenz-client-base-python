@@ -98,11 +98,15 @@ Support = "https://github.com/frequenz-floss/frequenz-client-base-python/discuss
 line-length = 88
 target-version = ['py311']
 include = '\.pyi?$'
+# Exclude generated protobuf files in tests/integration
+exclude = 'tests/integration/.*_pb2.*\.pyi?$'
 
 [tool.isort]
 profile = "black"
 line_length = 88
 src_paths = ["benchmarks", "examples", "src", "tests"]
+# Skip generated protobuf files
+skip_glob = ["tests/integration/*_pb2*.py", "tests/integration/*_pb2*.pyi"]
 
 [tool.flake8]
 # We give some flexibility to go over 88, there are cases like long URLs or
@@ -120,6 +124,12 @@ check-yield-types = false
 arg-type-hints-in-docstring = false
 arg-type-hints-in-signature = true
 allow-init-docstring = true
+# Exclude generated protobuf files
+exclude = ["tests/integration/*_pb2*.py", "tests/integration/*_pb2*.pyi"]
+
+[tool.pylint.master]
+# Ignore generated protobuf files
+ignore-patterns = ["tests/integration/.*_pb2.*\\.pyi?$"]
 
 [tool.pylint.similarities]
 ignore-comments = ['yes']
@@ -172,6 +182,8 @@ namespace_packages = true
 #no_incremental = true
 packages = ["frequenz.client.base"]
 strict = true
+# Exclude generated protobuf files from mypy checks
+exclude = 'tests/integration/.*_pb2.*\\.pyi?$'
 
 [[tool.mypy.overrides]]
 module = ["mkdocs_macros.*"]
